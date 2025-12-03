@@ -1,8 +1,2 @@
 node_modules
-coverage
-lib
-npm-debug.log*
-pnpm-lock.yaml
-yarn.lock
 .DS_Store
-*.log
