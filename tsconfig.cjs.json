@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./lib/cjs",
+    "module": "CommonJS",
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": true,
+    "removeComments": true
+  },
+  "include": ["index.ts"],
+  "exclude": ["tests", "**/*.test.ts", "**/*.spec.ts", "jest.config.cjs", "node_modules"]
+}
