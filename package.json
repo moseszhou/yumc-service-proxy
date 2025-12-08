@@ -1,6 +1,6 @@
 {
   "name": "yumc-service-proxy",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": false,
   "main": "./lib/cjs/index.js",
   "module": "./lib/esm/index.js",
