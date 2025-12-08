@@ -1,1 +1,0 @@
-{"version":3,"file":"createRnProxy.d.ts","sourceRoot":"","sources":["../../../src/createRnProxy.ts"],"names":[],"mappings":"AAMA,OAAO,KAAK,EAAE,YAAY,EAAE,cAAc,EAAE,MAAM,SAAS,CAAA;AAwD3D,wBAAgB,aAAa,CAAC,CAAC,SAAS,MAAM,CAAC,MAAM,EAAE,GAAG,CAAC,EACzD,eAAe,EAAE,OAAO,CAAC,CAAC,CAAC,EAC3B,WAAW,EAAE,MAAM,EACnB,OAAO,GAAE,YAAiB,GACzB,cAAc,CAAC,CAAC,CAAC,CAsDnB"}

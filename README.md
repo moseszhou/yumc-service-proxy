@@ -36,11 +36,12 @@ await navigatorService.push({ url: "/home" });
 
 ### 2. React Native 环境 - 使用 `createRnProxy`
 
-⚠️ **重要**：`createRnProxy` 只能在 RN 环境使用，需要从 `yumc-service-proxy/rn` 导入：
+⚠️ **重要**：`createRnProxy` 只能在 RN 环境使用。
+
+**方式 1：从主入口导入（推荐）**
 
 ```typescript
-// 只在 RN 环境中导入
-import { createRnProxy } from "yumc-service-proxy/rn";
+import { createRnProxy } from "yumc-service-proxy";
 
 interface NavigatorService {
   pushUri: (action: NavigationAction, opt?: any) => void;
@@ -69,12 +70,23 @@ navigatorService.pushUri({ url: "/home" });
 navigatorService.pop();
 ```
 
+**方式 2：从 RN 专用入口导入（兼容性更好）**
+
+```typescript
+// 从子路径导入，避免在非 RN 环境编译时引入
+import { createRnProxy } from "yumc-service-proxy/rn";
+
+// 使用方式相同
+const navigatorService = createRnProxy<NavigatorService>(/* ... */);
+```
+
 ### 3. 跨平台使用（推荐）
 
 在 Taro 项目中根据环境自动选择：
 
 ```typescript
 // services/navigator.ts
+import { createRnProxy, createReadyProxy } from "yumc-service-proxy";
 import type { ProxiedService } from "yumc-service-proxy";
 
 interface NavigatorService {
@@ -86,7 +98,6 @@ let navigatorService: ProxiedService<NavigatorService>;
 
 if (process.env.TARO_ENV === "rn") {
   // React Native 环境
-  const { createRnProxy } = require("yumc-service-proxy/rn");
   const { NativeModules } = require("react-native");
 
   navigatorService = createRnProxy<NavigatorService>(
@@ -99,8 +110,6 @@ if (process.env.TARO_ENV === "rn") {
   );
 } else {
   // H5/Cordova 环境
-  const { createReadyProxy } = require("yumc-service-proxy");
-
   navigatorService = createReadyProxy<NavigatorService>({}, "navigatorService");
 }
 
