@@ -1,8 +1,6 @@
-export interface ProxyOptions {
-    queueTimeout?: number;
-    debug?: boolean;
-    maxQueueSize?: number;
-    ready?: Promise<void>;
-}
-export declare function createReadyProxy<T extends Record<string, any>>(originalService: Partial<T>, serviceName: string, options?: ProxyOptions): T;
+export type { ProxyOptions, ProxiedService, QueuedCall } from './src/types';
+export { isThenable } from './src/utils';
+export { deviceReadyPromise } from './src/deviceReady';
+export { getRegisteredProxy, registerProxy } from './src/registry';
+export { createReadyProxy } from './src/createReadyProxy';
 //# sourceMappingURL=index.d.ts.map

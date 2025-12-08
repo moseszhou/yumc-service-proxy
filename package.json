@@ -10,6 +10,11 @@
       "types": "./lib/esm/index.d.ts",
       "require": "./lib/cjs/index.js",
       "import": "./lib/esm/index.js"
+    },
+    "./rn": {
+      "types": "./lib/esm/rn.d.ts",
+      "require": "./lib/cjs/rn.js",
+      "import": "./lib/esm/rn.js"
     }
   },
   "files": [
