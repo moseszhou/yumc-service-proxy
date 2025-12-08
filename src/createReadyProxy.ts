@@ -149,8 +149,14 @@ export function createReadyProxy<T extends Record<string, any>>(
           }
 
           log('Calling native method:', String(property))
-          // Cordova 原生方法通常期望成功/失败回调作为最后两个参数
-          nativeMethod.call(nativeService, ...args, resolve, reject)
+
+          const result = nativeMethod.call(nativeService, ...args)
+
+          if (isThenable(result)) {
+            result.then(resolve, reject)
+          } else {
+            resolve(result)
+          }
         } catch (error) {
           reject(error)
         }

@@ -8,6 +8,6 @@
     "sourceMap": true,
     "removeComments": true
   },
-  "include": ["index.ts", "rn.ts"],
+  "include": ["index.ts", "rn.ts", "src/**/*.ts"],
   "exclude": ["tests", "**/*.test.ts", "**/*.spec.ts", "jest.config.cjs", "node_modules"]
 }

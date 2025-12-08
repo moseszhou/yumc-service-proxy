@@ -61,7 +61,7 @@ function getNativeModules(): any {
  * ```
  */
 export function createRnProxy<T extends Record<string, any>>(
-  originalService: Partial<T>,
+  originalService: Partial<T> | ((service: T) => Partial<T>),
   serviceName: string,
   options: ProxyOptions = {}
 ): ProxiedService<T> {
@@ -80,6 +80,11 @@ export function createRnProxy<T extends Record<string, any>>(
   const nativeModule = NativeModules[serviceName]
   if (!nativeModule) {
     throw new Error(`Native module "${serviceName}" not found in NativeModules`)
+  }
+
+
+  if (typeof originalService === 'function') {
+    originalService = originalService(nativeModule)
   }
 
   // 合并原生模块和用户提供的方法

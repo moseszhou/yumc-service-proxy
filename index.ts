@@ -39,7 +39,7 @@ import type { ProxyOptions, ProxiedService } from './src/types'
  * @returns 代理后的服务对象
  */
 export function createRnProxy<T extends Record<string, any>>(
-  originalService: Partial<T>,
+  originalService: Partial<T> | ((service: T) => Partial<T>),
   serviceName: string,
   options?: ProxyOptions
 ): ProxiedService<T> {
