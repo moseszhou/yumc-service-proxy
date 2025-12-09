@@ -38,7 +38,7 @@ import { getRegisteredProxy, registerProxy } from './registry'
  * ```
  */
 export function createReadyProxy<T extends Record<string, any>>(
-  originalService: Partial<T>,
+  originalService: Partial<T> | ((service: T) => Partial<T>),
   serviceName: string,
   options: ProxyOptions = {}
 ): ProxiedService<T> {
