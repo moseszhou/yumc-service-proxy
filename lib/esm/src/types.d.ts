@@ -11,6 +11,9 @@ export interface ProxyOptions {
     maxQueueSize?: number;
     ready?: Promise<void>;
     version?: string;
+    functions?: string[];
+    enforceMethodFilter?: boolean;
+    removeFromGlobal?: boolean;
 }
 export type ProxiedService<T> = T & {
     name: string;

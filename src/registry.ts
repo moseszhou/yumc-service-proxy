@@ -29,3 +29,10 @@ export function getRegisteredProxy(serviceName: string): any | undefined {
 export function registerProxy(serviceName: string, proxy: any): void {
   proxyRegistry.set(serviceName, proxy)
 }
+
+/**
+ * 清空代理注册表（主要用于测试）
+ */
+export function clearRegistry(): void {
+  proxyRegistry.clear()
+}

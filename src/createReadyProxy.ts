@@ -58,7 +58,11 @@ export function createReadyProxy<T extends Record<string, any>>(
     debug: options.debug ?? false,
     maxQueueSize: options.maxQueueSize ?? 300,
     ready: options.ready ?? deviceReadyPromise,
-    version: options.version ?? ''
+    version: options.version ?? '',
+    functions: options.functions ?? [],
+    enforceMethodFilter: options.enforceMethodFilter ?? false,
+    // removeFromGlobal 默认与 enforceMethodFilter 保持一致
+    removeFromGlobal: options.removeFromGlobal ?? options.enforceMethodFilter ?? false
   }
 
   let isReady = false
@@ -117,14 +121,39 @@ export function createReadyProxy<T extends Record<string, any>>(
   }
 
   // 监听就绪 Promise
+  // 用于保存原生服务引用（在从 window 删除后仍可通过闭包访问）
+  let nativeServiceRef: any = null
+
   config.ready.then(() => {
     isReady = true
+
+    // 如果启用了 removeFromGlobal，先保存引用再删除
+    // 这样可以防止外部代码绕过代理直接访问 window[serviceName]
+    if (config.removeFromGlobal) {
+      try {
+        if (typeof window !== 'undefined' && serviceName in window) {
+          // ⚠️ 关键：删除前先保存引用到闭包中
+          nativeServiceRef = (window as any)[serviceName]
+          delete (window as any)[serviceName]
+          log(
+            `Removed from global window object for security (after deviceready). ` +
+            `Access is now only available through the proxy.`
+          )
+        }
+      } catch (error) {
+        console.warn(
+          `[ServiceProxy:${serviceName}] Failed to remove from global window:`,
+          error
+        )
+      }
+    }
+
     flushQueuedCalls()
   })
 
   /**
    * 创建原生方法桥接包装器
-   * 当 originalService 上不存在该方法时，尝试从 window[serviceName] 获取
+   * 当 originalService 上不存在该方法时，尝试从原生服务获取
    */
   const createNativeBridgeMethod = (property: string | symbol) => {
     return (...args: any[]) => {
@@ -136,7 +165,8 @@ export function createReadyProxy<T extends Record<string, any>>(
             return
           }
 
-          const nativeService = (window as any)[serviceName]
+          // 优先使用闭包中保存的引用，如果没有则从 window 获取
+          const nativeService = nativeServiceRef || (window as any)[serviceName]
           if (typeof nativeService === 'undefined') {
             reject(new Error(`Native service ${serviceName} not found`))
             return
@@ -224,6 +254,11 @@ export function createReadyProxy<T extends Record<string, any>>(
       }
       if (property === 'version') {
         return serviceVersion
+      }
+
+      // 如果启用了方法过滤，且 functions 不包含该属性，则返回 undefined
+      if (config.enforceMethodFilter && config.functions.length > 0 && typeof property === 'string' && !config.functions.includes(property)) {
+        return undefined
       }
 
       // 1. 先检查缓存

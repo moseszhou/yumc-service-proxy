@@ -96,8 +96,31 @@ export function createRnProxy<T extends Record<string, any>>(
 
   // 添加 name 和 version 字段
   const serviceVersion = options.version ?? ''
+  const serviceFunctions = options.functions ?? []
+  const enforceMethodFilter = options.enforceMethodFilter ?? false
+  // removeFromGlobal 默认与 enforceMethodFilter 保持一致
+  const removeFromGlobal = options.removeFromGlobal ?? enforceMethodFilter
   mergedService.name = serviceName
   mergedService.version = serviceVersion
+
+  // 如果启用了 removeFromGlobal，从全局 NativeModules 中删除该模块
+  // 这样可以防止外部代码绕过代理直接访问 NativeModules.ServiceName
+  if (removeFromGlobal) {
+    try {
+      delete NativeModules[serviceName]
+      if (options.debug) {
+        console.log(
+          `[ServiceProxy:${serviceName}] Removed from global NativeModules for security. ` +
+          `Access is now only available through the proxy.`
+        )
+      }
+    } catch (error) {
+      console.warn(
+        `[ServiceProxy:${serviceName}] Failed to remove from global NativeModules:`,
+        error
+      )
+    }
+  }
 
   // 创建 Proxy
   const proxy = new Proxy(mergedService, {
@@ -108,6 +131,11 @@ export function createRnProxy<T extends Record<string, any>>(
       }
       if (property === 'version') {
         return serviceVersion
+      }
+
+      // 如果启用了方法过滤，且 serviceFunctions 不包含该属性，则返回 undefined
+      if (enforceMethodFilter && serviceFunctions.length > 0 && typeof property === 'string' && !serviceFunctions.includes(property)) {
+        return undefined
       }
 
       // 返回合并后的属性
