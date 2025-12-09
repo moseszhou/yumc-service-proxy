@@ -180,12 +180,10 @@ export function createReadyProxy<T extends Record<string, any>>(
 
           log('Calling native method:', String(property))
 
-          const result = nativeMethod.call(nativeService, ...args)
+          const result = nativeMethod.call(nativeService, ...args, resolve, reject)
 
           if (isThenable(result)) {
             result.then(resolve, reject)
-          } else {
-            resolve(result)
           }
         } catch (error) {
           reject(error)
