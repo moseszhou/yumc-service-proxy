@@ -59,7 +59,7 @@ export function createReadyProxy<T extends Record<string, any>>(
     maxQueueSize: options.maxQueueSize ?? 300,
     ready: options.ready ?? deviceReadyPromise,
     version: options.version ?? '',
-    functions: options.functions ?? [],
+    properties: options.properties ?? [],
     enforceMethodFilter: options.enforceMethodFilter ?? false,
     // removeFromGlobal 默认与 enforceMethodFilter 保持一致
     removeFromGlobal: options.removeFromGlobal ?? options.enforceMethodFilter ?? false
@@ -264,8 +264,8 @@ export function createReadyProxy<T extends Record<string, any>>(
         return serviceVersion
       }
 
-      // 如果启用了方法过滤，且 functions 不包含该属性，则返回 undefined
-      if (config.enforceMethodFilter && config.functions.length > 0 && typeof property === 'string' && !config.functions.includes(property)) {
+      // 如果启用了方法过滤，且 properties 不包含该属性，则返回 undefined
+      if (config.enforceMethodFilter && config.properties.length > 0 && typeof property === 'string' && !config.properties.includes(property)) {
         return undefined
       }
 

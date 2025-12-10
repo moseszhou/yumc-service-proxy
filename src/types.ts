@@ -36,7 +36,7 @@ export interface ProxyOptions {
   /** 服务版本号 */
   version?: string
   /** 服务函数列表  对外暴露属性列表(接口或者属性) */
-  functions?: string[]
+  properties?: string[]
   /** 是否强制执行方法过滤（只暴露 functions 中指定的方法），默认 false */
   enforceMethodFilter?: boolean
   /** 是否从全局 NativeModules 中移除该模块（仅 createRnProxy），默认与 enforceMethodFilter 保持一致 */

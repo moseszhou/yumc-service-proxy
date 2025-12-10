@@ -11,7 +11,7 @@ export interface ProxyOptions {
     maxQueueSize?: number;
     ready?: Promise<void>;
     version?: string;
-    functions?: string[];
+    properties?: string[];
     enforceMethodFilter?: boolean;
     removeFromGlobal?: boolean;
 }

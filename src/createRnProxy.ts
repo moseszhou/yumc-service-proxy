@@ -94,9 +94,9 @@ export function createRnProxy<T extends Record<string, any>>(
     ...originalService
   } as Record<string, any>
 
-  // 添加 name 和 version 字段
+  // 添加 name 和 version 字段  
   const serviceVersion = options.version ?? ''
-  const serviceFunctions = options.functions ?? []
+  const serviceProperties = options.properties ?? []
   const enforceMethodFilter = options.enforceMethodFilter ?? false
   // removeFromGlobal 默认与 enforceMethodFilter 保持一致
   const removeFromGlobal = options.removeFromGlobal ?? enforceMethodFilter
@@ -134,7 +134,7 @@ export function createRnProxy<T extends Record<string, any>>(
       }
 
       // 如果启用了方法过滤，且 serviceFunctions 不包含该属性，则返回 undefined
-      if (enforceMethodFilter && serviceFunctions.length > 0 && typeof property === 'string' && !serviceFunctions.includes(property)) {
+      if (enforceMethodFilter && serviceProperties.length > 0 && typeof property === 'string' && !serviceProperties.includes(property)) {
         return undefined
       }
 
