@@ -23,7 +23,7 @@ export interface QueuedCall {
 
 
 interface ParamterItem {
-  sc: number  // sc callback函数签名中序号，从0开始
+  sc?: number  // sc callback函数签名中序号，从0开始
 }
 
 interface Paramter {
