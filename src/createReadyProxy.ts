@@ -38,7 +38,7 @@ import { getRegisteredProxy, registerProxy } from './registry'
  * ```
  */
 export function createReadyProxy<T extends Record<string, any>>(
-  originalService: Partial<T> | ((service: T) => Partial<T>),
+  originalService: Partial<T> | (({ service }: { service: T }) => Partial<T>),
   serviceName: string,
   options: ProxyOptions = {}
 ): ProxiedService<T> {
@@ -127,13 +127,15 @@ export function createReadyProxy<T extends Record<string, any>>(
   config.ready.then(() => {
     isReady = true
 
+    if (typeof window !== 'undefined' && serviceName in window) {
+      // ⚠️ 关键：删除前先保存引用到闭包中
+      nativeServiceRef = (window as any)[serviceName]
+    }
     // 如果启用了 removeFromGlobal，先保存引用再删除
     // 这样可以防止外部代码绕过代理直接访问 window[serviceName]
     if (config.removeFromGlobal) {
       try {
         if (typeof window !== 'undefined' && serviceName in window) {
-          // ⚠️ 关键：删除前先保存引用到闭包中
-          nativeServiceRef = (window as any)[serviceName]
           delete (window as any)[serviceName]
           log(
             `Removed from global window object for security (after deviceready). ` +
@@ -237,8 +239,10 @@ export function createReadyProxy<T extends Record<string, any>>(
    * 创建 Proxy
    */
   // 将 originalService 作为内部对象，使用 Record<string, any> 类型避免与 Partial<T> 的冲突
+  if (typeof originalService === "function") {
+    originalService = originalService({ service: nativeServiceRef })
+  }
   const internalService = originalService as Record<string, any>
-
   // 添加 name 和 version 字段
   const serviceVersion = config.version
   internalService.name = serviceName
