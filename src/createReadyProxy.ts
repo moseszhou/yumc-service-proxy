@@ -70,6 +70,13 @@ export function createReadyProxy<T extends Record<string, any>>(
   // 缓存包装后的方法，确保引用一致性并避免重复包装
   const methodCache = new Map<string | symbol, any>()
 
+  // 监听就绪 Promise
+  // 用于保存原生服务引用（在从 window 删除后仍可通过闭包访问）
+  let nativeServiceRef: any = null
+
+  let moduleObject = { service: nativeServiceRef }
+
+
   /**
    * 调试日志输出
    */
@@ -120,9 +127,7 @@ export function createReadyProxy<T extends Record<string, any>>(
     callsToProcess.forEach(executeQueuedCall)
   }
 
-  // 监听就绪 Promise
-  // 用于保存原生服务引用（在从 window 删除后仍可通过闭包访问）
-  let nativeServiceRef: any = null
+
 
   config.ready.then(() => {
     isReady = true
@@ -130,6 +135,7 @@ export function createReadyProxy<T extends Record<string, any>>(
     if (typeof window !== 'undefined' && serviceName in window) {
       // ⚠️ 关键：删除前先保存引用到闭包中
       nativeServiceRef = (window as any)[serviceName]
+      moduleObject.service = nativeServiceRef
     }
     // 如果启用了 removeFromGlobal，先保存引用再删除
     // 这样可以防止外部代码绕过代理直接访问 window[serviceName]
@@ -240,7 +246,7 @@ export function createReadyProxy<T extends Record<string, any>>(
    */
   // 将 originalService 作为内部对象，使用 Record<string, any> 类型避免与 Partial<T> 的冲突
   if (typeof originalService === "function") {
-    originalService = originalService({ service: nativeServiceRef })
+    originalService = originalService(moduleObject)
   }
   const internalService = originalService as Record<string, any>
   // 添加 name 和 version 字段
