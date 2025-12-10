@@ -6,7 +6,7 @@ export interface QueuedCall {
     timestamp: number;
 }
 interface ParamterItem {
-    sc: number;
+    sc?: number;
 }
 interface Paramter {
     h5?: Record<string, ParamterItem | undefined>;
