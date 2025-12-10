@@ -21,6 +21,16 @@ export interface QueuedCall {
   timestamp: number
 }
 
+
+interface ParamterItem {
+  sc: number  // sc callback函数签名中序号，从0开始
+}
+
+interface Paramter {
+  h5?: Record<string, ParamterItem | undefined>
+  rn?: Record<string, ParamterItem | undefined>
+}
+
 /**
  * 代理配置选项
  */
@@ -37,6 +47,8 @@ export interface ProxyOptions {
   version?: string
   /** 服务函数列表  对外暴露属性列表(接口或者属性) */
   properties?: string[]
+  /** 接口参数 */
+  parameter?: Paramter
   /** 是否强制执行方法过滤（只暴露 functions 中指定的方法），默认 false */
   enforceMethodFilter?: boolean
   /** 是否从全局 NativeModules 中移除该模块（仅 createRnProxy），默认与 enforceMethodFilter 保持一致 */

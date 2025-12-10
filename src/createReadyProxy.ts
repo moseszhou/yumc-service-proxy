@@ -62,7 +62,8 @@ export function createReadyProxy<T extends Record<string, any>>(
     properties: options.properties ?? [],
     enforceMethodFilter: options.enforceMethodFilter ?? false,
     // removeFromGlobal 默认与 enforceMethodFilter 保持一致
-    removeFromGlobal: options.removeFromGlobal ?? options.enforceMethodFilter ?? false
+    removeFromGlobal: options.removeFromGlobal ?? options.enforceMethodFilter ?? false,
+    scIndexRecord: options.parameter?.h5 ?? {}
   }
 
   let isReady = false
@@ -182,13 +183,33 @@ export function createReadyProxy<T extends Record<string, any>>(
 
           const nativeMethod = nativeService[property as keyof typeof nativeService]
           if (typeof nativeMethod !== 'function') {
-            reject(new Error(`Method ${String(property)} is not a function in native service ${serviceName}`))
-            return
+            return nativeMethod
           }
 
           log('Calling native method:', String(property))
+          const scIndexItem = config.scIndexRecord[property as string]
+          const scIndex = scIndexItem ? scIndexItem.sc : undefined
+          // callback 转 promise 
+          if (scIndex !== undefined) {
+            const sc_origin = args[scIndex]
+            const fc_origin = args[scIndex + 1]
 
-          const result = nativeMethod.call(nativeService, ...args, resolve, reject)
+            args[scIndex] = sc_origin === undefined ? resolve : function (_arg: any) {
+              if (typeof sc_origin === "function") {
+                sc_origin(_arg)
+              }
+              resolve(_arg)
+            }
+
+            args[scIndex + 1] = fc_origin === undefined ? reject : function (_arg: any) {
+              if (typeof sc_origin === "function") {
+                fc_origin(_arg)
+              }
+              resolve(_arg)
+            }
+          }
+
+          const result = nativeMethod.call(nativeService, ...args)
 
           if (isThenable(result)) {
             result.then(resolve, reject)
