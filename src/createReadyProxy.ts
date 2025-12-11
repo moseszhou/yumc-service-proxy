@@ -315,6 +315,29 @@ export function createReadyProxy<T extends Record<string, any>>(
 
       // 5. 否则原样返回（属性、Symbol 等）
       return value
+    },
+    has(target, property) {
+      // 如果启用了方法过滤，且 properties 不包含该属性，则返回 undefined
+      if (config.enforceMethodFilter && config.properties.length > 0 && typeof property === 'string' && !config.properties.includes(property)) {
+        return false
+      }
+      return Reflect.has(target, property)
+
+    },
+    ownKeys(target) {
+      return Reflect.ownKeys(target).filter(
+        (property) => {
+          if (config.enforceMethodFilter && config.properties.length > 0 && typeof property === 'string' && !config.properties.includes(property)) {
+            return false
+          }
+          return true
+        }
+      ) // Object.keys / for...in 看不到
+    },
+    getOwnPropertyDescriptor(target, property) {
+      if (config.enforceMethodFilter && config.properties.length > 0 && typeof property === 'string' && !config.properties.includes(property)) {
+        return undefined
+      } return Reflect.getOwnPropertyDescriptor(target, property)
     }
   }) as ProxiedService<T>
 
