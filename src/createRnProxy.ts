@@ -65,6 +65,14 @@ export function createRnProxy<T extends Record<string, any>>(
   serviceName: string,
   options: ProxyOptions = {}
 ): ProxiedService<T> {
+  // 合并默认配置
+  const config = {
+    properties: options.properties ?? [],
+    enforceMethodFilter: options.enforceMethodFilter ?? false,
+    // removeFromGlobal 默认与 enforceMethodFilter 保持一致
+    removeFromGlobal: options.removeFromGlobal ?? options.enforceMethodFilter ?? false,
+  }
+
   // 检查是否已创建过该服务的代理
   const existingProxyRef = getRegisteredProxy(serviceName)
   if (existingProxyRef) {
@@ -122,9 +130,17 @@ export function createRnProxy<T extends Record<string, any>>(
     }
   }
 
+  const hasOwnProperty = (obj: Record<string, any>, property: string | symbol): boolean => {
+    return Object.prototype.hasOwnProperty.call(obj, property)
+  }
+
+  const inWhiteList = (property: string | symbol): boolean => {
+    return typeof property === 'string' && Array.isArray(config.properties) && config.properties.includes(property)
+  }
+
   // 创建 Proxy
   const proxy = new Proxy(mergedService, {
-    get: function (_target: Record<string, any>, property: string | symbol): any {
+    get: function (target: Record<string, any>, property: string | symbol): any {
       // 处理 name 和 version 属性
       if (property === 'name') {
         return serviceName
@@ -134,12 +150,35 @@ export function createRnProxy<T extends Record<string, any>>(
       }
 
       // 如果启用了方法过滤，且 serviceFunctions 不包含该属性，则返回 undefined
-      if (enforceMethodFilter && serviceProperties.length > 0 && typeof property === 'string' && !serviceProperties.includes(property)) {
+      if (config.enforceMethodFilter && hasOwnProperty(target, property) && !inWhiteList(property)) {
         return undefined
       }
 
       // 返回合并后的属性
       return Reflect.get(mergedService, property)
+    },
+    has(target, property) {
+      // 如果启用了方法过滤，且 properties 不包含该属性，则返回 undefined
+      if (config.enforceMethodFilter && hasOwnProperty(target, property) && !inWhiteList(property)) {
+        return false
+      }
+      return Reflect.has(target, property)
+
+    },
+    ownKeys(target) {
+      return Reflect.ownKeys(target).filter(
+        (property) => {
+          if (config.enforceMethodFilter && !inWhiteList(property)) {
+            return false
+          }
+          return true
+        }
+      ) // Object.keys / for...in 看不到
+    },
+    getOwnPropertyDescriptor(target, property) {
+      if (config.enforceMethodFilter && hasOwnProperty(target, property) && !inWhiteList(property)) {
+        return undefined
+      } return Reflect.getOwnPropertyDescriptor(target, property)
     }
   }) as ProxiedService<T>
 

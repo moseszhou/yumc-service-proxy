@@ -275,8 +275,16 @@ export function createReadyProxy<T extends Record<string, any>>(
   internalService.name = serviceName
   internalService.version = serviceVersion
 
+  const hasOwnProperty = (obj: Record<string, any>, property: string | symbol): boolean => {
+    return Object.prototype.hasOwnProperty.call(obj, property)
+  }
+
+  const inWhiteList = (property: string | symbol): boolean => {
+    return typeof property === 'string' && Array.isArray(config.properties) && config.properties.includes(property)
+  }
+
   const proxy = new Proxy(internalService, {
-    get: function (_target: Record<string, any>, property: string | symbol): any {
+    get: function (target: Record<string, any>, property: string | symbol): any {
       // 处理 name 和 version 属性
       if (property === 'name') {
         return serviceName
@@ -286,7 +294,7 @@ export function createReadyProxy<T extends Record<string, any>>(
       }
 
       // 如果启用了方法过滤，且 properties 不包含该属性，则返回 undefined
-      if (config.enforceMethodFilter && config.properties.length > 0 && typeof property === 'string' && !config.properties.includes(property)) {
+      if (config.enforceMethodFilter && hasOwnProperty(target, property) && !inWhiteList(property)) {
         return undefined
       }
 
@@ -318,7 +326,7 @@ export function createReadyProxy<T extends Record<string, any>>(
     },
     has(target, property) {
       // 如果启用了方法过滤，且 properties 不包含该属性，则返回 undefined
-      if (config.enforceMethodFilter && config.properties.length > 0 && typeof property === 'string' && !config.properties.includes(property)) {
+      if (config.enforceMethodFilter && hasOwnProperty(target, property) && !inWhiteList(property)) {
         return false
       }
       return Reflect.has(target, property)
@@ -327,7 +335,7 @@ export function createReadyProxy<T extends Record<string, any>>(
     ownKeys(target) {
       return Reflect.ownKeys(target).filter(
         (property) => {
-          if (config.enforceMethodFilter && config.properties.length > 0 && typeof property === 'string' && !config.properties.includes(property)) {
+          if (config.enforceMethodFilter && !inWhiteList(property)) {
             return false
           }
           return true
@@ -335,7 +343,7 @@ export function createReadyProxy<T extends Record<string, any>>(
       ) // Object.keys / for...in 看不到
     },
     getOwnPropertyDescriptor(target, property) {
-      if (config.enforceMethodFilter && config.properties.length > 0 && typeof property === 'string' && !config.properties.includes(property)) {
+      if (config.enforceMethodFilter && hasOwnProperty(target, property) && !inWhiteList(property)) {
         return undefined
       } return Reflect.getOwnPropertyDescriptor(target, property)
     }
