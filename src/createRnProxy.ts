@@ -6,7 +6,7 @@
 
 import type { ProxyOptions, ProxiedService } from './types'
 import { getRegisteredProxy, registerProxy } from './registry'
-
+import { OBJECT_PROPERTIES } from './constant'
 /**
  * 获取 React Native NativeModules
  * 使用动态导入避免在非 RN 环境下的构建错误
@@ -130,12 +130,8 @@ export function createRnProxy<T extends Record<string, any>>(
     }
   }
 
-  const hasOwnProperty = (obj: Record<string, any>, property: string | symbol): boolean => {
-    return Object.prototype.hasOwnProperty.call(obj, property)
-  }
-
   const inWhiteList = (property: string | symbol): boolean => {
-    return typeof property === 'string' && Array.isArray(config.properties) && config.properties.includes(property)
+    return typeof property === 'string' && Array.isArray(config.properties) && (config.properties.includes(property) || OBJECT_PROPERTIES.includes(property))
   }
 
   // 创建 Proxy
@@ -150,7 +146,7 @@ export function createRnProxy<T extends Record<string, any>>(
       }
 
       // 如果启用了方法过滤，且 serviceFunctions 不包含该属性，则返回 undefined
-      if (config.enforceMethodFilter && hasOwnProperty(target, property) && !inWhiteList(property)) {
+      if (config.enforceMethodFilter && !inWhiteList(property)) {
         return undefined
       }
 
@@ -159,7 +155,7 @@ export function createRnProxy<T extends Record<string, any>>(
     },
     has(target, property) {
       // 如果启用了方法过滤，且 properties 不包含该属性，则返回 undefined
-      if (config.enforceMethodFilter && hasOwnProperty(target, property) && !inWhiteList(property)) {
+      if (config.enforceMethodFilter && !inWhiteList(property)) {
         return false
       }
       return Reflect.has(target, property)
@@ -176,7 +172,7 @@ export function createRnProxy<T extends Record<string, any>>(
       ) // Object.keys / for...in 看不到
     },
     getOwnPropertyDescriptor(target, property) {
-      if (config.enforceMethodFilter && hasOwnProperty(target, property) && !inWhiteList(property)) {
+      if (config.enforceMethodFilter && !inWhiteList(property)) {
         return undefined
       } return Reflect.getOwnPropertyDescriptor(target, property)
     }
