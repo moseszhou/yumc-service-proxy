@@ -27,14 +27,45 @@ interface NavigatorService {
   pop: () => Promise<void>;
 }
 
-const navigatorService = createReadyProxy<NavigatorService>({}, "navigatorService", {
-  version: "1.0.0",
-  queueTimeout: 20000,
-  maxQueueSize: 200,
-  functions: ["push", "pop"],
-  enforceMethodFilter: true,
-  removeFromGlobal: true, // deviceready 后移除 window.navigatorService，强制走代理
-});
+const navigatorService = createReadyProxy<NavigatorService>(
+  (module) => ({
+    // 此处只能使用 module.service，不能使用 {service} 解构参数
+    // 因为在函数执行时,module.service 还未赋值
+    // service 参数是从 NativeModules 获取的原生模块实例
+    pushUri: (action, opt) => {
+      if (typeof opt !== "object") {
+        opt = { _value: opt };
+      }
+      module.service.pushUri(action, opt);
+    },
+  }),
+  "navigatorService",
+  {
+    version: "1.0.0",
+    queueTimeout: 20000,
+    maxQueueSize: 200,
+    functions: ["push", "pop"],
+    enforceMethodFilter: true,
+    removeFromGlobal: true, // deviceready 后移除 window.navigatorService，强制走代理
+  }
+);
+
+const navigatorService = createReadyProxy<NavigatorService>(
+  {
+    pushUri: (action, opt) => {
+      // customer logic
+    },
+  },
+  "navigatorService",
+  {
+    version: "1.0.0",
+    queueTimeout: 20000,
+    maxQueueSize: 200,
+    functions: ["push", "pop"],
+    enforceMethodFilter: true,
+    removeFromGlobal: true, // deviceready 后移除 window.navigatorService，强制走代理
+  }
+);
 
 // 即使在 deviceready 前调用，也会被加入队列并在就绪后执行
 await navigatorService.push({ url: "/home" });
@@ -53,15 +84,17 @@ interface NavigatorService {
 }
 
 const navigatorService = createRnProxy<NavigatorService>(
-  (nativeModules) => { // 此处只能使用 nativeModules，不能使用 {service: NavigatorService},RN中直接解析没有问题，但是H5中 service 会是 undefined，需要通过 nativeModules.service 访问。nativeModules.service为native提供的原始服务。
-    // 覆盖/包装原生方法
+  (module) => ({
+    // 此处只能使用 module.service，不能使用 {service} 解构参数
+    // 因为在函数执行时,module.service 还未赋值
+    // service 参数是从 NativeModules 获取的原生模块实例
     pushUri: (action, opt) => {
       if (typeof opt !== "object") {
         opt = { _value: opt };
       }
-      nativeModules.service.pushUri(action, opt);
+      module.service.pushUri(action, opt);
     },
-  },
+  }),
   "navigatorService",
   {
     version: "1.0.0",
@@ -113,11 +146,14 @@ export { navigatorService };
 
 ### `createReadyProxy<T>(service, serviceName, options?)`
 
-为 Cordova/H5 原生服务创建代理。未就绪时入队，`deviceready` 或自定义 `ready` Promise 结束后自动执行；缺失方法会桥接到 `window[serviceName]`；可选删除全局引用防止绕过代理。工厂函数会在创建阶段执行，`deviceready` 前传入的 `service` 可能为空。
+为 Cordova/H5 原生服务创建代理。未就绪时入队，`deviceready` 或自定义 `ready` Promise 结束后自动执行；缺失方法会桥接到 `window[serviceName]`；可选删除全局引用防止绕过代理。
 
 **参数**
 
-- `service`: `Partial<T>` 或 `({ service }: { service: T }) => Partial<T>`（工厂函数会在创建时执行）
+- `service`: `Partial<T>` 或 `({ service }: { service: T }) => Partial<T>`
+  - 可以传入对象直接提供方法实现，或传入工厂函数动态构建
+  - 工厂函数的 `service` 参数是从 `window[serviceName]` 获取的原生服务实例（`deviceready` 后才可用）
+  - 工厂函数在创建代理时立即执行，此时 `service` 可能为 `null`（`deviceready` 前）
 - `serviceName`: `string` - 全局原生对象名称
 - `options`: `ProxyOptions`
   - `queueTimeout` (`number`, 默认 `30000`)：队列调用超时
@@ -136,7 +172,10 @@ export { navigatorService };
 
 **参数**
 
-- `service`: `Partial<T>` 或 `({ service }: { service: T }) => Partial<T>`（工厂接收原生模块）
+- `service`: `Partial<T>` 或 `({ service }: { service: T }) => Partial<T>`
+  - 可以传入对象直接提供方法实现，或传入工厂函数动态构建
+  - 工厂函数的 `service` 参数是从 `NativeModules[serviceName]` 获取的原生模块实例
+  - 工厂函数在创建代理时立即执行，此时 `service` 始终可用（否则会抛出错误）
 - `serviceName`: `string` - `NativeModules` 中的模块名
 - `options`: `ProxyOptions`
   - `functions` (`string[]`, 默认 `[]`)
