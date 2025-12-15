@@ -1,6 +1,6 @@
 {
   "name": "yumc-service-proxy",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "private": false,
   "main": "./lib/cjs/index.js",
   "module": "./lib/esm/index.js",
@@ -11,16 +11,16 @@
       "require": "./lib/cjs/index.js",
       "import": "./lib/esm/index.js"
     },
-    "./rn": {
-      "types": "./lib/esm/index.rn.d.ts",
-      "require": "./lib/cjs/index.rn.js",
-      "import": "./lib/esm/index.rn.js"
+    "./h5": {
+      "types": "./lib/esm/index.h5.d.ts",
+      "require": "./lib/cjs/index.h5.js",
+      "import": "./lib/esm/index.h5.js"
     }
   },
   "typesVersions": {
     "*": {
-      "rn": [
-        "./lib/esm/index.rn.d.ts"
+      "h5": [
+        "./lib/esm/index.h5.d.ts"
       ],
       "*": [
         "./lib/esm/index.d.ts"
@@ -28,9 +28,7 @@
     }
   },
   "files": [
-    "lib",
-    "rn.js",
-    "rn.d.ts"
+    "lib"
   ],
   "scripts": {
     "build": "npm run build:esm && npm run build:cjs",

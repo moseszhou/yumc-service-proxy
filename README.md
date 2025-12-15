@@ -12,15 +12,15 @@ yarn add yumc-service-proxy
 
 ## 入口
 
-- H5/Cordova：`import { createReadyProxy } from "yumc-service-proxy"`
-- React Native：`import { createRnProxy } from "yumc-service-proxy/rn"`（RN 专用 bundle，避免 Web 构建时引入 react-native）
+- React Native：`import { createRnProxy } from "yumc-service-proxy"`（默认导出）
+- H5/Cordova：`import { createReadyProxy } from "yumc-service-proxy/h5"`
 
 ## 使用示例
 
 ### Cordova/H5 - `createReadyProxy`
 
 ```typescript
-import { createReadyProxy } from "yumc-service-proxy";
+import { createReadyProxy } from "yumc-service-proxy/h5";
 
 interface NavigatorService {
   push: (params: any) => Promise<void>;
@@ -74,8 +74,7 @@ await navigatorService.push({ url: "/home" });
 ### React Native - `createRnProxy`
 
 ```typescript
-// RN 环境专用入口
-import { createRnProxy } from "yumc-service-proxy/rn";
+import { createRnProxy } from "yumc-service-proxy";
 
 interface NavigatorService {
   pushUri: (action: NavigationAction, opt?: any) => void;
@@ -113,8 +112,8 @@ navigatorService.pop();
 
 ```typescript
 // services/navigator.ts
-import { createReadyProxy } from "yumc-service-proxy";
-import { createRnProxy } from "yumc-service-proxy/rn";
+import { createRnProxy } from "yumc-service-proxy";
+import { createReadyProxy } from "yumc-service-proxy/h5";
 import type { ProxiedService } from "yumc-service-proxy";
 
 interface NavigatorService {

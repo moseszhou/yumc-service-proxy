@@ -11,4 +11,4 @@
 export type { ProxyOptions, ProxiedService } from './src/types'
 
 // 导出主要功能函数
-export { createRnProxy } from './src/createRnProxy'
+export { createReadyProxy } from './src/createReadyProxy'
