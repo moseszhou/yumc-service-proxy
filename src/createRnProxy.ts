@@ -1,12 +1,13 @@
 /**
  * CreateRnProxy 模块
- * 
+ *
  * 为 React Native 原生模块提供代理包装
  */
 
 import type { ProxyOptions, ProxiedService } from './types'
 import { getRegisteredProxy, registerProxy } from './registry'
 import { OBJECT_PROPERTIES } from './constant'
+import { attachCanIUse } from './canIUse'
 /**
  * 获取 React Native NativeModules
  * 使用动态导入避免在非 RN 环境下的构建错误
@@ -17,28 +18,25 @@ function getNativeModules(): any {
     const RN = require('react-native')
     return RN.NativeModules
   } catch (error) {
-    throw new Error(
-      'react-native is not available. ' +
-      'Make sure you are running in a React Native environment and react-native is installed.'
-    )
+    throw new Error('react-native is not available. ' + 'Make sure you are running in a React Native environment and react-native is installed.')
   }
 }
 
 /**
  * 创建 React Native 原生模块代理
- * 
+ *
  * 为 React Native 原生模块创建一个 Proxy 包装器，该包装器会：
  * - 从 NativeModules[serviceName] 获取原生模块
  * - 允许覆盖部分方法实现
  * - 添加 name 和 version 字段
  * - 防止重复创建同一服务的代理
- * 
+ *
  * @template T - 服务对象的类型，必须是对象类型
  * @param originalService - 原始服务对象（可以是空对象或部分方法覆盖）
  * @param serviceName - 服务名称，用于从 NativeModules 获取原生模块
  * @param options - 代理配置选项
  * @returns 代理后的服务对象（完整的 T 类型）
- * 
+ *
  * @example
  * ```typescript
  * // 覆盖部分方法
@@ -52,10 +50,10 @@ function getNativeModules(): any {
  *     NativeModules.NavigatorService.pushUri(action, opt)
  *   }
  * }, 'NavigatorService', { version: '1.0.0' })
- * 
+ *
  * // 使用空对象，所有方法从原生模块获取
  * const storageService = createRnProxy<StorageService>(
- *   {}, 
+ *   {},
  *   'StorageService'
  * )
  * ```
@@ -70,15 +68,14 @@ export function createRnProxy<T extends Record<string, any>>(
     properties: options.properties ?? [],
     enforceMethodFilter: options.enforceMethodFilter ?? false,
     // removeFromGlobal 默认与 enforceMethodFilter 保持一致
-    removeFromGlobal: options.removeFromGlobal ?? options.enforceMethodFilter ?? false,
+    removeFromGlobal: options.removeFromGlobal ?? options.enforceMethodFilter ?? false
   }
 
   // 检查是否已创建过该服务的代理
   const existingProxyRef = getRegisteredProxy(serviceName)
   if (existingProxyRef) {
     console.warn(
-      `[ServiceProxy] Service "${serviceName}" has already been proxied. ` +
-      `Returning existing proxy instance to avoid duplicate creation.`
+      `[ServiceProxy] Service "${serviceName}" has already been proxied. ` + `Returning existing proxy instance to avoid duplicate creation.`
     )
     return existingProxyRef
   }
@@ -89,7 +86,6 @@ export function createRnProxy<T extends Record<string, any>>(
   if (!nativeModule) {
     throw new Error(`Native module "${serviceName}" not found in NativeModules`)
   }
-
 
   if (typeof originalService === 'function') {
     originalService = originalService({ service: nativeModule })
@@ -102,7 +98,7 @@ export function createRnProxy<T extends Record<string, any>>(
     ...originalService
   } as Record<string, any>
 
-  // 添加 name 和 version 字段  
+  // 添加 name 和 version 字段
   const serviceVersion = options.version ?? ''
   const serviceProperties = options.properties ?? []
   const enforceMethodFilter = options.enforceMethodFilter ?? false
@@ -118,21 +114,28 @@ export function createRnProxy<T extends Record<string, any>>(
       delete NativeModules[serviceName]
       if (options.debug) {
         console.log(
-          `[ServiceProxy:${serviceName}] Removed from global NativeModules for security. ` +
-          `Access is now only available through the proxy.`
+          `[ServiceProxy:${serviceName}] Removed from global NativeModules for security. ` + `Access is now only available through the proxy.`
         )
       }
     } catch (error) {
-      console.warn(
-        `[ServiceProxy:${serviceName}] Failed to remove from global NativeModules:`,
-        error
-      )
+      console.warn(`[ServiceProxy:${serviceName}] Failed to remove from global NativeModules:`, error)
     }
   }
 
   const inWhiteList = (property: string | symbol): boolean => {
-    return typeof property === 'string' && Array.isArray(config.properties) && (config.properties.includes(property) || OBJECT_PROPERTIES.includes(property))
+    return (
+      typeof property === 'string' &&
+      Array.isArray(config.properties) &&
+      (property === 'canIUse' || config.properties.includes(property) || OBJECT_PROPERTIES.includes(property))
+    )
   }
+
+  const canIUse = attachCanIUse(mergedService, {
+    // RN 不需要 ready；canIUse 检查 NativeModules[serviceName] 本体，而不是用户覆盖后的 mergedService。
+    resolveService: () => nativeModule,
+    // 开启白名单时，native 方法也必须在 properties 中才可被代理使用。
+    isAllowed: (functionName) => !config.enforceMethodFilter || inWhiteList(functionName)
+  })
 
   // 创建 Proxy
   const proxy = new Proxy(mergedService, {
@@ -144,6 +147,9 @@ export function createRnProxy<T extends Record<string, any>>(
       if (property === 'version') {
         return serviceVersion
       }
+      if (property === 'canIUse') {
+        return canIUse
+      }
 
       // 如果启用了方法过滤，且 serviceFunctions 不包含该属性，则返回 undefined
       if (config.enforceMethodFilter && !inWhiteList(property)) {
@@ -154,27 +160,33 @@ export function createRnProxy<T extends Record<string, any>>(
       return Reflect.get(mergedService, property)
     },
     has(target, property) {
+      if (property === 'canIUse') {
+        return true
+      }
+
       // 如果启用了方法过滤，且 properties 不包含该属性，则返回 undefined
       if (config.enforceMethodFilter && !inWhiteList(property)) {
         return false
       }
       return Reflect.has(target, property)
-
     },
     ownKeys(target) {
-      return Reflect.ownKeys(target).filter(
-        (property) => {
-          if (config.enforceMethodFilter && !inWhiteList(property)) {
-            return false
-          }
-          return true
+      return Reflect.ownKeys(target).filter((property) => {
+        if (config.enforceMethodFilter && !inWhiteList(property)) {
+          return false
         }
-      ) // Object.keys / for...in 看不到
+        return true
+      }) // Object.keys / for...in 看不到
     },
     getOwnPropertyDescriptor(target, property) {
+      if (property === 'canIUse') {
+        return Reflect.getOwnPropertyDescriptor(target, property)
+      }
+
       if (config.enforceMethodFilter && !inWhiteList(property)) {
         return undefined
-      } return Reflect.getOwnPropertyDescriptor(target, property)
+      }
+      return Reflect.getOwnPropertyDescriptor(target, property)
     }
   }) as ProxiedService<T>
 
@@ -187,4 +199,3 @@ export function createRnProxy<T extends Record<string, any>>(
 
   return proxy
 }
-

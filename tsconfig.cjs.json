@@ -3,11 +3,11 @@
   "compilerOptions": {
     "outDir": "./lib/cjs",
     "module": "CommonJS",
-    "declaration": false,
-    "declarationMap": false,
+    "declaration": true,
+    "declarationMap": true,
     "sourceMap": true,
     "removeComments": true
   },
-  "include": ["index.ts", "index.h5.ts", "src/**/*.ts"],
+  "include": ["index.ts", "index.h5.ts", "index.other.ts", "src/**/*.ts"],
   "exclude": ["tests", "**/*.test.ts", "**/*.spec.ts", "jest.config.cjs", "node_modules"]
 }

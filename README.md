@@ -1,209 +1,211 @@
 # yumc-service-proxy
 
-为 Cordova/PhoneGap 与 React Native 原生服务提供智能代理包装，统一就绪控制、方法过滤与安全隔离。
+为 H5/Cordova、React Native 和其它非 Native 环境提供统一的服务代理。
+
+这个包的目标是让业务代码用同一套服务对象访问平台能力，同时把平台差异收敛到代理层：
+
+- H5/Cordova：等待 `deviceready` 或自定义 `ready` 后访问 `window[serviceName]`。
+- React Native：同步读取 `NativeModules[serviceName]`。
+- 其它平台/小程序：没有 native service，统一降级为 no-op。
 
 ## 安装
 
 ```bash
-npm install yumc-service-proxy
-# 或
 yarn add yumc-service-proxy
 ```
 
 ## 入口
 
-- React Native：`import { createRnProxy } from "yumc-service-proxy"`（默认导出）
-- H5/Cordova：`import { createReadyProxy } from "yumc-service-proxy/h5"`
-
-## 使用示例
-
-### Cordova/H5 - `createReadyProxy`
-
 ```typescript
-import { createReadyProxy } from "yumc-service-proxy/h5";
+// React Native，默认入口
+import { createReadyProxy } from 'yumc-service-proxy'
 
-interface NavigatorService {
-  push: (params: any) => Promise<void>;
-  pop: () => Promise<void>;
-}
+// H5/Cordova
+import { createReadyProxy } from 'yumc-service-proxy/h5'
 
-const navigatorService = createReadyProxy<NavigatorService>(
-  (module) => ({
-    // 此处只能使用 module.service，不能使用 {service} 解构参数
-    // 因为在函数执行时,module.service 还未赋值
-    // service 参数是从 NativeModules 获取的原生模块实例
-    pushUri: (action, opt) => {
-      if (typeof opt !== "object") {
-        opt = { _value: opt };
-      }
-      module.service.pushUri(action, opt);
-    },
-  }),
-  "navigatorService",
-  {
-    version: "1.0.0",
-    queueTimeout: 20000,
-    maxQueueSize: 200,
-    functions: ["push", "pop"],
-    enforceMethodFilter: true,
-    removeFromGlobal: true, // deviceready 后移除 window.navigatorService，强制走代理
-  }
-);
-
-const navigatorService = createReadyProxy<NavigatorService>(
-  {
-    pushUri: (action, opt) => {
-      // customer logic
-    },
-  },
-  "navigatorService",
-  {
-    version: "1.0.0",
-    queueTimeout: 20000,
-    maxQueueSize: 200,
-    functions: ["push", "pop"],
-    enforceMethodFilter: true,
-    removeFromGlobal: true, // deviceready 后移除 window.navigatorService，强制走代理
-  }
-);
-
-// 即使在 deviceready 前调用，也会被加入队列并在就绪后执行
-await navigatorService.push({ url: "/home" });
+// 小程序/其它非 Native 平台
+import { createReadyProxy } from 'yumc-service-proxy/other'
 ```
 
-### React Native - `createRnProxy`
+## HTML Canvas 流程图
+
+完整 H5/RN 创建代理代码流程图使用 HTML Canvas 绘制，文件在 [docs/platform-flow.html](./docs/platform-flow.html)。
+
+在浏览器打开该文件可以查看 `createReadyProxy` / `createRnProxy` 内部如何合并配置、读取 native service、创建 `Proxy`、注册实例并返回代理对象。
+
+## H5/Cordova 用法
 
 ```typescript
-import { createRnProxy } from "yumc-service-proxy";
+import { createReadyProxy } from 'yumc-service-proxy/h5'
 
-interface NavigatorService {
-  pushUri: (action: NavigationAction, opt?: any) => void;
-  pop: () => void;
-  close: () => void;
+interface RedPacketRainService {
+  start: (options: Record<string, unknown>) => Promise<void>
+  stop: () => Promise<void>
 }
 
-const navigatorService = createRnProxy<NavigatorService>(
-  (module) => ({
-    // 此处只能使用 module.service，不能使用 {service} 解构参数
-    // 因为在函数执行时,module.service 还未赋值
-    // service 参数是从 NativeModules 获取的原生模块实例
-    pushUri: (action, opt) => {
-      if (typeof opt !== "object") {
-        opt = { _value: opt };
-      }
-      module.service.pushUri(action, opt);
-    },
-  }),
-  "navigatorService",
-  {
-    version: "1.0.0",
-    enforceMethodFilter: true,
-    functions: ["pushUri", "pop", "close"],
-    removeFromGlobal: true, // 从 NativeModules 移除，避免绕过代理
-    debug: true,
-  }
-);
+export const redPacketRainService = createReadyProxy<RedPacketRainService>({}, 'redPacketRainService', {
+  version: '1.0.0',
+  queueTimeout: 30000,
+  maxQueueSize: 300,
+  properties: ['start', 'stop'],
+  enforceMethodFilter: true,
+  removeFromGlobal: true
+})
 
-navigatorService.pushUri({ url: "/home" });
-navigatorService.pop();
+await redPacketRainService.canIUse('start')
+await redPacketRainService.start({ scene: 'home' })
 ```
 
-### 跨平台（Taro 等）
+### H5 执行规则
+
+- `createReadyProxy` 创建代理后立即返回服务对象。
+- 普通方法在 `ready` 前调用会进入队列，`ready` 后统一 flush。
+- `ready` 默认来自 Cordova `deviceready`，也可以通过 `options.ready` 自定义。
+- `ready` 后代理会捕获 `window[serviceName]`，并在 `removeFromGlobal=true` 时删除全局引用。
+- 当本地 `originalService` 没有对应方法时，会桥接到 `window[serviceName][method]`。
+- `canIUse(functionName)` 返回 `Promise<boolean>`，会等待 `ready` 后检查 native service。
+- 开启 `enforceMethodFilter` 时，只有 `properties` 中声明的方法才可用。
+
+## React Native 用法
 
 ```typescript
-// services/navigator.ts
-import { createRnProxy } from "yumc-service-proxy";
-import { createReadyProxy } from "yumc-service-proxy/h5";
-import type { ProxiedService } from "yumc-service-proxy";
+import { createReadyProxy } from 'yumc-service-proxy'
 
-interface NavigatorService {
-  push: (params: any) => Promise<void> | void;
-  pop: () => Promise<void> | void;
+interface RedPacketRainService {
+  start: (options: Record<string, unknown>) => void
+  stop: () => void
 }
 
-let navigatorService: ProxiedService<NavigatorService>;
+export const redPacketRainService = createReadyProxy<RedPacketRainService>({}, 'RedPacketRainService', {
+  version: '1.0.0',
+  properties: ['start', 'stop'],
+  enforceMethodFilter: true,
+  removeFromGlobal: true
+})
 
-if (process.env.TARO_ENV === "rn") {
-  navigatorService = createRnProxy<NavigatorService>({}, "NavigatorService");
+const available = await redPacketRainService.canIUse('start')
+if (available) {
+  redPacketRainService.start({ scene: 'home' })
+}
+```
+
+### RN 执行规则
+
+- `createRnProxy` 创建时立即读取 `NativeModules[serviceName]`。
+- 如果 native module 不存在，会直接抛错。
+- 用户传入的 `originalService` 会覆盖同名 native 方法，用于业务适配。
+- `removeFromGlobal=true` 时会从 `NativeModules` 删除原始模块引用，强制业务走代理。
+- `canIUse(functionName)` 返回 `Promise<boolean>`，不等待 ready。
+- RN 的 `canIUse` 只检查 `NativeModules[serviceName]` 本体，不检查用户覆盖后的方法。
+- 开启 `enforceMethodFilter` 时，native 方法也必须在 `properties` 中才可用。
+
+## 小程序/其它平台用法
+
+```typescript
+import { createReadyProxy } from 'yumc-service-proxy/other'
+
+interface RedPacketRainService {
+  start: (options: Record<string, unknown>) => void
+  stop: () => void
+}
+
+export const redPacketRainService = createReadyProxy<RedPacketRainService>({}, 'RedPacketRainService', { version: '1.0.0' })
+
+await redPacketRainService.canIUse('start') // false
+redPacketRainService.start({ scene: 'home' }) // no-op
+```
+
+### 其它平台执行规则
+
+- 不访问 `window`。
+- 不访问 `NativeModules`。
+- `canIUse(functionName)` 永远返回 `Promise<false>`。
+- 任意业务方法都返回空函数，调用后返回 `undefined`。
+
+## 跨平台封装建议
+
+```typescript
+import type { ProxiedService } from 'yumc-service-proxy'
+
+interface RedPacketRainService {
+  start: (options: Record<string, unknown>) => Promise<void> | void
+  stop: () => Promise<void> | void
+}
+
+let redPacketRainService: ProxiedService<RedPacketRainService>
+
+if (process.env.TARO_ENV === 'h5') {
+  const { createReadyProxy } = await import('yumc-service-proxy/h5')
+} else if (process.env.TARO_ENV === 'rn') {
+  const { createReadyProxy } = await import('yumc-service-proxy')
 } else {
-  navigatorService = createReadyProxy<NavigatorService>({}, "navigatorService");
+  const { createReadyProxy } = await import('yumc-service-proxy/other')
 }
-
-export { navigatorService };
+redPacketRainService = createReadyProxy<RedPacketRainService>({}, 'RedPacketRainService')
+export { redPacketRainService }
 ```
-
-## 核心能力
-
-- `deviceready` 队列：H5/Cordova 在就绪前缓存调用，超时/队列上限可控
-- 原生桥接：方法缺失时自动从 `window[serviceName]`（H5）或 `NativeModules[serviceName]`（RN）桥接
-- 方法过滤：`functions` + `enforceMethodFilter` 限定可暴露方法，默认为关闭
-- 全局隔离：`removeFromGlobal` 可在就绪后移除 `window.serviceName` 或 `NativeModules.ServiceName`
-- 单例注册：同名服务只创建一个代理，避免重复实例
-- 调试与版本：`debug` 输出日志，自动附加 `name`、`version` 字段
 
 ## API
 
 ### `createReadyProxy<T>(service, serviceName, options?)`
 
-为 Cordova/H5 原生服务创建代理。未就绪时入队，`deviceready` 或自定义 `ready` Promise 结束后自动执行；缺失方法会桥接到 `window[serviceName]`；可选删除全局引用防止绕过代理。
+H5/Cordova 入口和其它平台入口都使用这个函数名，但行为不同：
 
-**参数**
+- `yumc-service-proxy/h5`：等待 ready，桥接 `window[serviceName]`。
+- `yumc-service-proxy/other`：不访问 native，全部降级。
+- React Native 入口，读取 `NativeModules[serviceName]` 并创建代理。
 
-- `service`: `Partial<T>` 或 `({ service }: { service: T }) => Partial<T>`
-  - 可以传入对象直接提供方法实现，或传入工厂函数动态构建
-  - 工厂函数的 `service` 参数是从 `window[serviceName]` 获取的原生服务实例（`deviceready` 后才可用）
-  - 工厂函数在创建代理时立即执行，此时 `service` 可能为 `null`（`deviceready` 前）
-- `serviceName`: `string` - 全局原生对象名称
-- `options`: `ProxyOptions`
-  - `queueTimeout` (`number`, 默认 `30000`)：队列调用超时
-  - `maxQueueSize` (`number`, 默认 `300`)：队列最大长度
-  - `ready` (`Promise<void>`, 默认 `deviceReadyPromise`)：自定义就绪条件
-  - `functions` (`string[]`, 默认 `[]`)：允许暴露的方法名
-  - `enforceMethodFilter` (`boolean`, 默认 `false`)：是否只暴露 `functions` 中的方法
-  - `removeFromGlobal` (`boolean`, 默认与 `enforceMethodFilter` 一致)：就绪后是否删除 `window[serviceName]`
-  - `version` (`string`, 默认 `''`)、`debug` (`boolean`, 默认 `false`)
-
-**返回** `ProxiedService<T>`：包装后的服务，附带 `name`、`version`
-
-### `createRnProxy<T>(service, serviceName, options?)`
-
-为 React Native 原生模块创建代理。立即从 `NativeModules[serviceName]` 读取模块（不存在会抛错），将原生方法与自定义实现合并；可选方法过滤和从 `NativeModules` 移除原始引用。
-
-**参数**
-
-- `service`: `Partial<T>` 或 `({ service }: { service: T }) => Partial<T>`
-  - 可以传入对象直接提供方法实现，或传入工厂函数动态构建
-  - 工厂函数的 `service` 参数是从 `NativeModules[serviceName]` 获取的原生模块实例
-  - 工厂函数在创建代理时立即执行，此时 `service` 始终可用（否则会抛出错误）
-- `serviceName`: `string` - `NativeModules` 中的模块名
-- `options`: `ProxyOptions`
-  - `functions` (`string[]`, 默认 `[]`)
-  - `enforceMethodFilter` (`boolean`, 默认 `false`)
-  - `removeFromGlobal` (`boolean`, 默认与 `enforceMethodFilter` 一致) - 控制是否从 `NativeModules` 删除
-  - `version` (`string`, 默认 `''`)、`debug` (`boolean`, 默认 `false`)
-  - `queueTimeout`、`maxQueueSize`、`ready` 在 RN 代理中不会被使用
-
-**返回** `ProxiedService<T>`：包装后的模块，附带 `name`、`version`
-
-### 类型定义
+### `ProxyOptions`
 
 ```typescript
 export interface ProxyOptions {
-  queueTimeout?: number;
-  debug?: boolean;
-  maxQueueSize?: number;
-  ready?: Promise<void>;
-  version?: string;
-  functions?: string[];
-  enforceMethodFilter?: boolean;
-  removeFromGlobal?: boolean;
+  queueTimeout?: number
+  debug?: boolean
+  maxQueueSize?: number
+  ready?: Promise<void>
+  version?: string
+  properties?: string[]
+  parameter?: {
+    h5?: Record<string, { sc?: number } | undefined>
+    rn?: Record<string, { sc?: number } | undefined>
+  }
+  enforceMethodFilter?: boolean
+  removeFromGlobal?: boolean
 }
-
-export type ProxiedService<T> = T & {
-  name: string;
-  version: string;
-};
 ```
+
+### `ProxiedService<T>`
+
+```typescript
+export type ProxiedService<T> = T & {
+  name: string
+  version: string
+  canIUse(functionName: string): Promise<boolean>
+}
+```
+
+## `canIUse` 语义
+
+H5/Cordova：
+
+- 检查对象：`nativeServiceRef || window[serviceName]`
+- 是否等待 ready：是
+- 白名单规则：开启 `enforceMethodFilter` 时必须命中 `properties`
+- 返回值：`Promise<boolean>`
+
+React Native：
+
+- 检查对象：`NativeModules[serviceName]`
+- 是否等待 ready：否
+- 白名单规则：开启 `enforceMethodFilter` 时必须命中 `properties`
+- 返回值：`Promise<boolean>`
+
+其它/小程序：
+
+- 检查对象：无 native service
+- 是否等待 ready：否
+- 白名单规则：不适用
+- 返回值：`Promise<false>`
 
 ## License
 

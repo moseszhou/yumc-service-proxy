@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>yumc-service-proxy Proxy Creation Flow</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f8fafc;
+      --fg: #0f172a;
+      --muted: #475569;
+      --border: #cbd5e1;
+      --surface: #ffffff;
+      --h5: #2563eb;
+      --rn: #16a34a;
+      --decision: #d97706;
+      --runtime: #7c3aed;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #020617;
+        --fg: #e2e8f0;
+        --muted: #94a3b8;
+        --border: #334155;
+        --surface: #0f172a;
+      }
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    main {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+      font-weight: 600;
+    }
+
+    p {
+      margin: 0 0 16px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>H5 / RN 创建代理代码流程</h1>
+    <p>这张图画的是源码执行顺序：入口文件如何进入 createReadyProxy/createRnProxy，函数内部如何初始化状态、创建 Proxy、注册并返回代理。</p>
+    <canvas id="flow" width="1600" height="1500" aria-label="H5 and React Native proxy creation code flow"></canvas>
+  </main>
+
+  <script>
+    const canvas = document.getElementById('flow')
+    const ctx = canvas.getContext('2d')
+    const style = getComputedStyle(document.documentElement)
+
+    const color = {
+      bg: style.getPropertyValue('--surface').trim(),
+      fg: style.getPropertyValue('--fg').trim(),
+      muted: style.getPropertyValue('--muted').trim(),
+      border: style.getPropertyValue('--border').trim(),
+      h5: style.getPropertyValue('--h5').trim(),
+      rn: style.getPropertyValue('--rn').trim(),
+      decision: style.getPropertyValue('--decision').trim(),
+      runtime: style.getPropertyValue('--runtime').trim()
+    }
+
+    function roundRect(x, y, width, height, radius) {
+      ctx.beginPath()
+      ctx.moveTo(x + radius, y)
+      ctx.lineTo(x + width - radius, y)
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius)
+      ctx.lineTo(x + width, y + height - radius)
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height)
+      ctx.lineTo(x + radius, y + height)
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius)
+      ctx.lineTo(x, y + radius)
+      ctx.quadraticCurveTo(x, y, x + radius, y)
+      ctx.closePath()
+    }
+
+    function wrap(text, x, y, maxWidth, lineHeight) {
+      const chars = text.split('')
+      let line = ''
+      let lineCount = 0
+      for (const char of chars) {
+        const candidate = line + char
+        if (ctx.measureText(candidate).width > maxWidth && line) {
+          ctx.fillText(line, x, y + lineCount * lineHeight)
+          line = char
+          lineCount += 1
+        } else {
+          line = candidate
+        }
+      }
+      if (line) {
+        ctx.fillText(line, x, y + lineCount * lineHeight)
+        lineCount += 1
+      }
+      return lineCount
+    }
+
+    function box(x, y, w, h, title, body, stroke) {
+      ctx.save()
+      ctx.fillStyle = color.bg
+      ctx.strokeStyle = stroke
+      ctx.lineWidth = 2
+      roundRect(x, y, w, h, 8)
+      ctx.fill()
+      ctx.stroke()
+      ctx.fillStyle = stroke
+      ctx.font = '600 17px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+      ctx.fillText(title, x + 16, y + 26)
+      ctx.fillStyle = color.fg
+      ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+      wrap(body, x + 16, y + 50, w - 32, 18)
+      ctx.restore()
+    }
+
+    function diamond(cx, cy, w, h, title, body) {
+      ctx.save()
+      ctx.fillStyle = color.bg
+      ctx.strokeStyle = color.decision
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(cx, cy - h / 2)
+      ctx.lineTo(cx + w / 2, cy)
+      ctx.lineTo(cx, cy + h / 2)
+      ctx.lineTo(cx - w / 2, cy)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+      ctx.fillStyle = color.decision
+      ctx.font = '600 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText(title, cx, cy - 8)
+      ctx.fillStyle = color.fg
+      ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+      ctx.fillText(body, cx, cy + 12)
+      ctx.textAlign = 'left'
+      ctx.restore()
+    }
+
+    function arrow(x1, y1, x2, y2, stroke, label) {
+      const head = 9
+      const angle = Math.atan2(y2 - y1, x2 - x1)
+      ctx.save()
+      ctx.strokeStyle = stroke
+      ctx.fillStyle = stroke
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(x1, y1)
+      ctx.lineTo(x2, y2)
+      ctx.stroke()
+      ctx.beginPath()
+      ctx.moveTo(x2, y2)
+      ctx.lineTo(x2 - head * Math.cos(angle - Math.PI / 6), y2 - head * Math.sin(angle - Math.PI / 6))
+      ctx.lineTo(x2 - head * Math.cos(angle + Math.PI / 6), y2 - head * Math.sin(angle + Math.PI / 6))
+      ctx.closePath()
+      ctx.fill()
+      if (label) {
+        ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+        ctx.fillText(label, (x1 + x2) / 2 + 8, (y1 + y2) / 2 - 8)
+      }
+      ctx.restore()
+    }
+
+    function title(text, x, y, stroke) {
+      ctx.save()
+      ctx.fillStyle = stroke
+      ctx.font = '700 25px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+      ctx.fillText(text, x, y)
+      ctx.restore()
+    }
+
+    function note(x, y, w, h, text) {
+      ctx.save()
+      ctx.fillStyle = color.bg
+      ctx.strokeStyle = color.runtime
+      ctx.setLineDash([6, 5])
+      ctx.lineWidth = 2
+      roundRect(x, y, w, h, 8)
+      ctx.fill()
+      ctx.stroke()
+      ctx.setLineDash([])
+      ctx.fillStyle = color.runtime
+      ctx.font = '600 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+      ctx.fillText('返回后的 Proxy trap', x + 16, y + 25)
+      ctx.fillStyle = color.fg
+      ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+      wrap(text, x + 16, y + 50, w - 32, 18)
+      ctx.restore()
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      ctx.fillStyle = color.bg
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+      ctx.fillStyle = color.fg
+      ctx.font = '700 32px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+      ctx.fillText('创建代理对象的源码流程', 42, 52)
+      ctx.fillStyle = color.muted
+      ctx.font = '16px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+      ctx.fillText('左侧对应 src/createReadyProxy.ts，右侧对应 src/createRnProxy.ts；虚线框表示代理返回后才触发的 get/has/ownKeys 行为。', 42, 84)
+
+      title('H5 / createReadyProxy', 60, 135, color.h5)
+      box(60, 160, 610, 78, '入口', 'index.h5.ts 导出 createReadyProxy，业务通过 yumc-service-proxy/h5 调用。', color.h5)
+      box(60, 275, 610, 78, '函数入参', 'originalService、serviceName、options 进入 createReadyProxy<T>()。', color.h5)
+      diamond(365, 410, 260, 82, 'registry 命中?', 'getRegisteredProxy(serviceName)')
+      box(60, 495, 610, 88, '合并配置', 'queueTimeout、debug、maxQueueSize、ready、version、properties、enforceMethodFilter、removeFromGlobal、parameter.h5。', color.h5)
+      box(60, 625, 610, 96, '初始化闭包状态', 'isReady=false、queuedCalls=[]、methodCache、nativeServiceRef=null、moduleObject={ service:null }。', color.h5)
+      box(60, 765, 610, 112, '注册 ready 回调', 'config.ready.then：设置 isReady=true；读取 window[serviceName] 到 nativeServiceRef；可选 delete window[serviceName]；flushQueuedCalls()。', color.h5)
+      diamond(365, 950, 280, 88, 'originalService 是函数?', 'typeof originalService === function')
+      box(60, 1050, 610, 96, '生成 internalService', '函数形式执行 originalService(moduleObject)；对象形式直接使用；随后写入 name、version、canIUse。', color.h5)
+      box(60, 1188, 610, 98, '创建 Proxy', '定义 get、has、ownKeys、getOwnPropertyDescriptor；白名单由 properties + OBJECT_PROPERTIES + canIUse 判断。', color.h5)
+      box(60, 1325, 610, 78, '注册并返回', 'registerProxy(serviceName, proxy)，返回 ProxiedService<T>。', color.h5)
+
+      arrow(365, 238, 365, 275, color.h5)
+      arrow(365, 353, 365, 369, color.h5)
+      arrow(365, 451, 365, 495, color.h5, '否')
+      arrow(365, 583, 365, 625, color.h5)
+      arrow(365, 721, 365, 765, color.h5)
+      arrow(365, 877, 365, 906, color.h5)
+      arrow(365, 994, 365, 1050, color.h5, '是/否')
+      arrow(365, 1146, 365, 1188, color.h5)
+      arrow(365, 1286, 365, 1325, color.h5)
+      arrow(235, 410, 60, 410, color.decision, '是：return existingProxy')
+
+      note(705, 190, 330, 230, 'proxy.name / version 直接返回；proxy.canIUse 返回 Promise<boolean>，等待 ready 后检查 nativeServiceRef || window[serviceName]。')
+      note(705, 470, 330, 260, '读取业务方法时：先查 methodCache，再查 internalService；本地函数会被 wrapMethod 包装。ready 前入队，ready 后执行。')
+      note(705, 790, 330, 250, '如果 internalService 上没有该方法，get trap 会创建 native bridge 方法，调用 nativeServiceRef/window[serviceName][method]。')
+      note(705, 1100, 330, 220, 'enforceMethodFilter=true 时，不在 properties 中的方法返回 undefined；canIUse 自身始终保留。')
+
+      title('RN / createRnProxy', 1070, 135, color.rn)
+      box(1070, 160, 470, 78, '入口', 'index.ts 默认导出 createRnProxy，并将 createReadyProxy alias 到 createRnProxy。', color.rn)
+      box(1070, 275, 470, 78, '函数入参', 'originalService、serviceName、options 进入 createRnProxy<T>()。', color.rn)
+      box(1070, 390, 470, 88, '合并基础配置', 'properties、enforceMethodFilter、removeFromGlobal。RN 不使用 ready、queueTimeout、maxQueueSize。', color.rn)
+      diamond(1305, 550, 260, 82, 'registry 命中?', 'getRegisteredProxy(serviceName)')
+      box(1070, 635, 470, 88, '读取 RN NativeModules', 'getNativeModules() 内部 require("react-native")，返回 RN.NativeModules。', color.rn)
+      diamond(1305, 795, 260, 82, 'nativeModule 存在?', 'NativeModules[serviceName]')
+      diamond(1305, 940, 280, 88, 'originalService 是函数?', 'typeof originalService === function')
+      box(1070, 1040, 470, 96, '合并服务对象', 'mergedService = { ...nativeModule, ...originalService }；用户实现可覆盖同名 native 方法。', color.rn)
+      box(1070, 1178, 470, 96, '写入元信息与隔离', '写入 name、version；removeFromGlobal=true 时 delete NativeModules[serviceName]。', color.rn)
+      box(1070, 1315, 470, 96, '创建、注册并返回 Proxy', '挂载 canIUse；创建 get/has/ownKeys/descriptor traps；registerProxy 后返回。', color.rn)
+
+      arrow(1305, 238, 1305, 275, color.rn)
+      arrow(1305, 353, 1305, 390, color.rn)
+      arrow(1305, 478, 1305, 509, color.rn)
+      arrow(1305, 591, 1305, 635, color.rn, '否')
+      arrow(1305, 723, 1305, 754, color.rn)
+      arrow(1305, 836, 1305, 896, color.rn, '是')
+      arrow(1305, 984, 1305, 1040, color.rn, '是/否')
+      arrow(1305, 1136, 1305, 1178, color.rn)
+      arrow(1305, 1274, 1305, 1315, color.rn)
+      arrow(1175, 550, 1035, 550, color.decision, '是：return existingProxy')
+      arrow(1435, 795, 1540, 795, color.decision, '否：throw')
+
+      note(705, 1360, 330, 96, 'RN 返回后的 get trap：name/version/canIUse 特判；开启白名单时，不在 properties 的方法返回 undefined；其它属性直接从 mergedService 读取。')
+    }
+
+    draw()
+  </script>
+</body>
+</html>

@@ -64,4 +64,11 @@ export type ProxiedService<T> = T & {
   name: string
   /** 服务版本 */
   version: string
+  /**
+   * 检查代理持有的服务对象中是否包含指定可调用方法。
+   *
+   * @param functionName - 要检查的方法名。
+   * @returns 如果存在同名函数则 resolve true，否则 resolve false。
+   */
+  canIUse(functionName: string): Promise<boolean>
 }
