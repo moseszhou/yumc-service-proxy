@@ -186,6 +186,13 @@ export type ProxiedService<T> = T & {
 }
 ```
 
+### 多个 Service 包的统一导出规则
+
+- `createReadyProxy<XxxService>` 的返回类型已经是 `ProxiedService<XxxService>`，三端统一附带代理能力；无需修改业务接口或另拆协议类型。
+- 直接导出工厂返回值并保留类型推断，不能把单例标注或断言成仅有业务方法的 `XxxService`。自引用初始化需要显式类型时，可标注 `ProxiedService<XxxService>`，或只为扩展工厂回调标注返回类型以打断循环推断。
+- 服务包的 `package.json.types` 指向同时导出单例和公共类型的根入口，不能只指向业务协议文件。
+- `ProxiedService<T>` 只扩展返回类型，不会修改传入的 `T`。函数式扩展收到的原始 `service` 仍使用业务协议类型。
+
 ## `canIUse` 语义
 
 H5/Cordova：
