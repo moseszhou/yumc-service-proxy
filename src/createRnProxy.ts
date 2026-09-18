@@ -27,12 +27,13 @@ function getNativeModules(): any {
  *
  * 为 React Native 原生模块创建一个 Proxy 包装器，该包装器会：
  * - 从 NativeModules[serviceName] 获取原生模块
+ * - 原生模块缺失时仍返回代理，canIUse 返回 false，跳过函数式扩展初始化
  * - 允许覆盖部分方法实现
  * - 添加 name 和 version 字段
  * - 防止重复创建同一服务的代理
  *
  * @template T - 服务对象的类型，必须是对象类型
- * @param originalService - 原始服务对象（可以是空对象或部分方法覆盖）
+ * @param originalService - 原始服务对象或扩展工厂；原生模块缺失时不执行工厂
  * @param serviceName - 服务名称，用于从 NativeModules 获取原生模块
  * @param options - 代理配置选项
  * @returns 代理后的服务对象（完整的 T 类型）
@@ -83,12 +84,10 @@ export function createRnProxy<T extends Record<string, any>>(
   // 从 NativeModules 获取原生模块
   const NativeModules = getNativeModules()
   const nativeModule = NativeModules[serviceName]
-  if (!nativeModule) {
-    throw new Error(`Native module "${serviceName}" not found in NativeModules`)
-  }
 
   if (typeof originalService === 'function') {
-    originalService = originalService({ service: nativeModule })
+    // 旧壳子可能没有集成该模块，避免扩展工厂读取不存在的原生服务。
+    originalService = nativeModule ? originalService({ service: nativeModule }) : {}
   }
 
   // 合并原生模块和用户提供的方法

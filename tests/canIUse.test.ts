@@ -1,6 +1,7 @@
 import { createReadyProxy } from '../src/createReadyProxy'
 import { createRnProxy } from '../src/createRnProxy'
-import { clearRegistry } from '../src/registry'
+import { createReadyProxy as createRnReadyProxy } from '../index'
+import { clearRegistry, getRegisteredProxy } from '../src/registry'
 
 interface ExampleService {
   existingMethod: () => string
@@ -128,5 +129,63 @@ describe('canIUse', () => {
     await expect(proxy.canIUse('blockedNativeMethod')).resolves.toBe(false)
     await expect(proxy.canIUse('nativeValue')).resolves.toBe(false)
     await expect(proxy.canIUse('missingMethod')).resolves.toBe(false)
+  })
+
+  it.each([undefined, null])('returns false when the RN native module is %s', async (nativeModule) => {
+    jest.doMock('react-native', () => ({ NativeModules: { RuntimeService: nativeModule } }), { virtual: true })
+
+    const proxy = createRnReadyProxy<ExampleService>({}, 'RuntimeService', { version: '1.0.0' })
+
+    await expect(proxy.canIUse('existingMethod')).resolves.toBe(false)
+    await expect(proxy.canIUse('toString')).resolves.toBe(false)
+    expect(proxy.existingMethod).toBeUndefined()
+    expect(proxy.name).toBe('RuntimeService')
+    expect(proxy.version).toBe('1.0.0')
+    expect(getRegisteredProxy('RuntimeService')).toBe(proxy)
+  })
+
+  it('keeps local overrides usable without reporting them as missing RN native capabilities', async () => {
+    jest.doMock('react-native', () => ({ NativeModules: {} }), { virtual: true })
+
+    const proxy = createRnProxy<ExampleService>(
+      { existingMethod: () => 'local' },
+      'RuntimeService',
+      { enforceMethodFilter: true, properties: ['existingMethod'] },
+    )
+
+    await expect(proxy.canIUse('existingMethod')).resolves.toBe(false)
+    await expect(proxy.canIUse('missingMethod')).resolves.toBe(false)
+    expect(proxy.existingMethod()).toBe('local')
+    expect('canIUse' in proxy).toBe(true)
+    expect(() => Object.keys(proxy)).not.toThrow()
+  })
+
+  it.each([undefined, null])('skips the RN extension factory when the native module is %s', async (nativeModule) => {
+    jest.doMock('react-native', () => ({ NativeModules: { RuntimeService: nativeModule } }), { virtual: true })
+
+    const proxy = createRnReadyProxy<ExampleService>(
+      ({ service }) => ({ existingMethod: service.existingMethod.bind(service) }),
+      'RuntimeService',
+      { enforceMethodFilter: true, properties: ['existingMethod'] },
+    )
+
+    await expect(proxy.canIUse('existingMethod')).resolves.toBe(false)
+    expect(proxy.existingMethod).toBeUndefined()
+  })
+
+  it('preserves raw native access in RN extension factories after removing the global module', async () => {
+    const nativeModule: ExampleService = { existingMethod: () => 'native' }
+    const nativeModules: { RuntimeService?: ExampleService } = { RuntimeService: nativeModule }
+    jest.doMock('react-native', () => ({ NativeModules: nativeModules }), { virtual: true })
+
+    const proxy = createRnReadyProxy<ExampleService>(
+      ({ service }) => ({ existingMethod: () => `wrapped:${service.existingMethod()}` }),
+      'RuntimeService',
+      { enforceMethodFilter: true, properties: ['existingMethod'] },
+    )
+
+    await expect(proxy.canIUse('existingMethod')).resolves.toBe(true)
+    expect(proxy.existingMethod()).toBe('wrapped:native')
+    expect(nativeModules.RuntimeService).toBeUndefined()
   })
 })

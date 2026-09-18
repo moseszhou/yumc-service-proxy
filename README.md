@@ -92,8 +92,10 @@ if (available) {
 ### RN 执行规则
 
 - `createRnProxy` 创建时立即读取 `NativeModules[serviceName]`。
-- 如果 native module 不存在，会直接抛错。
+- 如果 native module 不存在，仍返回代理；`await service.canIUse('方法名')` 返回 `false`，不会因缺少模块而在创建时抛错。
 - 用户传入的 `originalService` 会覆盖同名 native 方法，用于业务适配。
+- 函数形式的 `originalService` 仅在 native module 存在时执行，接收原始 `{ service }`；模块缺失时跳过初始化。对象形式的本地方法仍保留，但不会被 `canIUse` 识别为 native 能力。
+- 调用原生方法前应先 `await canIUse('方法名')`；不存在且没有本地覆盖的方法仍为 `undefined`。
 - `removeFromGlobal=true` 时会从 `NativeModules` 删除原始模块引用，强制业务走代理。
 - `canIUse(functionName)` 返回 `Promise<boolean>`，不等待 ready。
 - RN 的 `canIUse` 只检查 `NativeModules[serviceName]` 本体，不检查用户覆盖后的方法。
